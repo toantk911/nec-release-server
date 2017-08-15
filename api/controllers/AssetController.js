@@ -34,6 +34,7 @@ module.exports = {
    * (GET /download/channel/:channel/:platform?': 'AssetController.download')
    */
   download: function(req, res) {
+    //sails.log.debug('download', req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress);
     var channel = req.params.channel;
     var version = req.params.version || undefined;
     var filename = req.params.filename;
@@ -139,6 +140,7 @@ module.exports = {
 
         // Serve asset & log analytics
         return AssetService.serveFile(req, res, asset);
+        //res.redirect(302, 'http://localhost/nec_deployment/PixelzEditorClient-2.1.20-full.nupkg');
       })
       // Catch any unhandled errors
       .catch(res.negotiate);
