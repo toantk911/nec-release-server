@@ -50,7 +50,13 @@ module.exports = {
     fd: {
       type: 'string',
       required: true
-    }
+    },
+     
+    caches: {
+      collection: 'cache',
+      via: 'asset',
+      through: 'assetcache'
+    },
   },
   autoPK: false
 };
