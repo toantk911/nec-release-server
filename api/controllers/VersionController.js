@@ -162,6 +162,7 @@ module.exports = {
    * (GET /update/:platform/:version/:channel/RELEASES)
    */
   windows: function(req, res) {
+    var ip = UtilityService.getClientIp(req);
     var platform = req.param('platform');
     var version = req.param('version');
     var channel = req.param('channel') || 'stable';
@@ -177,6 +178,7 @@ module.exports = {
     var platforms = PlatformService.detect(platform, true);
 
     sails.log.debug('Windows Update Search Query', {
+      ip: ip,
       platform: platforms,
       version: version,
       channel: channel
@@ -201,6 +203,13 @@ module.exports = {
         }
 
         sails.log.debug('Time Filter', createdAtFilter);
+
+        IpAddress
+          .findOne(ip)
+          .then(function(ipAddress) {
+            sails.log.debug('ipAddress', ipAddress);
+            var cacheId = ipAddress ? ipAddress.cacheId : 2;
+          });
 
         return Version
           .find(UtilityService.getTruthyObject({

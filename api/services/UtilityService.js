@@ -23,4 +23,13 @@ UtilityService.compareVersion = function(v1, v2) {
   return -semver.compare(v1.name, v2.name);
 };
 
+/**
+ * Get client's ip address from its request
+ * @param {Object}  req Request from client
+ * @return {string}     Ip address
+ */
+UtilityService.getClientIp = function(req) {
+  return req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || req.connection.socket.remoteAddress;
+};
+
 module.exports = UtilityService;
