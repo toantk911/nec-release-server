@@ -6,6 +6,7 @@
  */
 
 var _ = require('lodash');
+var url = require('url');
 var path = require('path');
 var actionUtil = require('sails/lib/hooks/blueprints/actionUtil');
 var Promise = require('bluebird');
@@ -33,7 +34,8 @@ module.exports = {
    * (GET /download/:version/:platform?/:filename?': 'AssetController.download')
    * (GET /download/channel/:channel/:platform?': 'AssetController.download')
    */
-  download: function(req, res) {
+  download: function (req, res) {
+    var ip = UtilityService.getClientIp(req);
     var channel = req.params.channel;
     var version = req.params.version || undefined;
     var filename = req.params.filename;
@@ -70,55 +72,62 @@ module.exports = {
       channel = channel || 'stable';
     }
 
-    var assetPromise = new Promise(function(resolve, reject) {
-        var assetOptions = UtilityService.getTruthyObject({
-          platform: platforms,
-          filetype: filetype
+    var assetPromise = new Promise(function (resolve, reject) {
+      IpAddress
+        .findOne(ip)
+        .then(function (ipAddress) {
+          var cacheId = ipAddress ? ipAddress.cacheId : sails.config.defaultCache;
+
+          var assetOptions = UtilityService.getTruthyObject({
+            platform: platforms,
+            filetype: filetype,
+            cache: cacheId
+          });
+
+          sails.log.debug('Asset requested with options', assetOptions);
+
+          if (version || channel) {
+            Version
+              .find(UtilityService.getTruthyObject({
+                name: version,
+                channel: channel
+              }))
+              .sort({
+                createdAt: 'desc'
+              })
+              .limit(1)
+              .populate('assets', assetOptions)
+              .then(function (versions) {
+                if (!versions || !versions.length) {
+                  return resolve();
+                }
+
+                var version = versions[0];
+
+                if (!version.assets || !version.assets.length) {
+                  return resolve();
+                }
+
+                // Sorting filename in ascending order prioritizes other files
+                // over zip archives is both are available and matched.
+                return resolve(_.orderBy(
+                  version.assets, ['filetype', 'createdAt'], ['asc', 'desc']
+                )[0]);
+              })
+              .catch(reject);
+          } else {
+            Asset
+              .find(assetOptions)
+              .sort({
+                createdAt: 'desc'
+              })
+              .limit(1)
+              .then(resolve)
+              .catch(reject);
+          }
         });
-
-        sails.log.debug('Asset requested with options', assetOptions);
-
-        if (version || channel) {
-          Version
-            .find(UtilityService.getTruthyObject({
-              name: version,
-              channel: channel
-            }))
-            .sort({
-              createdAt: 'desc'
-            })
-            .limit(1)
-            .populate('assets', assetOptions)
-            .then(function(versions) {
-              if (!versions || !versions.length) {
-                return resolve();
-              }
-
-              var version = versions[0];
-
-              if (!version.assets || !version.assets.length) {
-                return resolve();
-              }
-
-              // Sorting filename in ascending order prioritizes other files
-              // over zip archives is both are available and matched.
-              return resolve(_.orderBy(
-                version.assets, ['filetype', 'createdAt'], ['asc', 'desc']
-              )[0]);
-            })
-            .catch(reject);
-        } else {
-          Asset
-            .find(assetOptions)
-            .sort({
-              createdAt: 'desc'
-            })
-            .limit(1)
-            .then(resolve)
-            .catch(reject);
-        }
-      })
-      .then(function(asset) {
+    })
+      .then(function (asset) {
         if (!asset || !asset.fd) {
           var noneFoundMessage = 'No download available';
 
@@ -139,13 +148,12 @@ module.exports = {
 
         // Serve asset & log analytics
         return AssetService.serveFile(req, res, asset);
-        //res.redirect(302, 'http://localhost/nec_deployment/PixelzEditorClient-2.1.20-full.nupkg');
       })
       // Catch any unhandled errors
       .catch(res.negotiate);
   },
 
-  create: function(req, res) {
+  create: function (req, res) {
     // Create data object (monolithic combination of all parameters)
     // Omit the blacklisted params (like JSONP callback param, etc.)
     var data = actionUtil.parseValues(req);
@@ -186,6 +194,7 @@ module.exports = {
         var uploadedFile = uploadedFiles[0];
 
         var fileExt = path.extname(uploadedFile.filename);
+        var fileRelativePath = uploadedFile.fd.replace(path.join(sails.config.files.dirname), '');
 
         sails.log.debug('Creating asset with name', uploadedFile.filename);
 
@@ -200,14 +209,14 @@ module.exports = {
         }
 
         hashPromise
-          .then(function(fileHash) {
+          .then(function (fileHash) {
             // Create new instance of model using data from params
             Asset
               .create(_.merge({
                 name: uploadedFile.filename,
                 hash: fileHash,
                 filetype: fileExt,
-                fd: uploadedFile.fd,
+                fd: fileRelativePath,
                 size: uploadedFile.size,
                 cache: sails.config.defaultCache
               }, data))
@@ -236,7 +245,7 @@ module.exports = {
       });
   },
 
-  destroy: function(req, res) {
+  destroy: function (req, res) {
     var pk = actionUtil.requirePk(req);
 
     var query = Asset.findOne(pk);
@@ -249,9 +258,9 @@ module.exports = {
 
         // Delete the file & remove from db
         return Promise.join(
-            AssetService.destroy(record, req),
-            AssetService.deleteFile(record),
-            function() {})
+          AssetService.destroy(record, req),
+          AssetService.deleteFile(record),
+          function () { })
           .then(function success() {
             res.ok(record);
           });
