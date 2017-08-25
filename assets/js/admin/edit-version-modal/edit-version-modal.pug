@@ -29,12 +29,14 @@ form(editable-form='', name='versionForm', onaftersave='acceptEdit()', e-role='f
           tr
             td Name
             td Platform
+            td Cache
             td Downloads
             td
         tbody
           tr(data-ng-repeat='asset in version.assets')
             td {{ asset.name }}
             td {{ DataService.availablePlatforms[asset.platform] }}
+            td {{ asset.cache }}
             td {{ asset.download_count }}
             td(style="white-space: nowrap")
               button.btn.btn-default.btn-sm(type='button', ng-click="openEditAssetModal(asset)")

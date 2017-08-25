@@ -8,11 +8,8 @@
 module.exports = {
 
   attributes: {
-
     name: {
       type: 'string',
-      primaryKey: true,
-      unique: true,
       required: true
     },
 
@@ -51,12 +48,11 @@ module.exports = {
       type: 'string',
       required: true
     },
-     
-    caches: {
-      collection: 'cache',
-      via: 'asset',
-      through: 'assetcache'
-    },
+
+    cache: {
+      model: 'cache',
+      required: true
+    }
   },
-  autoPK: false
+  autoPK: true
 };

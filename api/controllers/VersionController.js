@@ -16,7 +16,7 @@ module.exports = {
    * Redirect the update request to the appropriate endpoint
    * (GET /update)
    */
-  redirect: function(req, res) {
+  redirect: function (req, res) {
     var platform = req.param('platform');
     var version = req.param('version');
 
@@ -37,7 +37,7 @@ module.exports = {
    *
    * (GET /update/:platform/:version/:channel)
    */
-  general: function(req, res) {
+  general: function (req, res) {
     var platform = req.param('platform');
     var version = req.param('version');
     var channel = req.param('channel') || 'stable';
@@ -62,7 +62,7 @@ module.exports = {
     // cutoff.
     Version
       .findOne(version)
-      .then(function(currentVersion) {
+      .then(function (currentVersion) {
 
         var applicableChannels, createdAtFilter;
 
@@ -87,7 +87,7 @@ module.exports = {
           .populate('assets', {
             platform: platforms
           })
-          .then(function(newerVersions) {
+          .then(function (newerVersions) {
             // Sort versions which were added after the current one by semver in
             // descending order.
             newerVersions.sort(UtilityService.compareVersion);
@@ -97,9 +97,9 @@ module.exports = {
 
             var releaseNotes = _.reduce(
               newerVersions,
-              function(prevNotes, newVersion) {
+              function (prevNotes, newVersion) {
 
-                newVersion.assets = _.filter(newVersion.assets, function(asset) {
+                newVersion.assets = _.filter(newVersion.assets, function (asset) {
                   return asset.filetype === '.zip';
                 });
 
@@ -161,7 +161,7 @@ module.exports = {
    *
    * (GET /update/:platform/:version/:channel/RELEASES)
    */
-  windows: function(req, res) {
+  windows: function (req, res) {
     var ip = UtilityService.getClientIp(req);
     var platform = req.param('platform');
     var version = req.param('version');
@@ -188,7 +188,7 @@ module.exports = {
     // cutoff.
     Version
       .findOne(version)
-      .then(function(currentVersion) {
+      .then(function (currentVersion) {
         var applicableChannels, createdAtFilter;
 
         applicableChannels = ChannelService.getApplicableChannels(channel);
@@ -206,7 +206,7 @@ module.exports = {
 
         IpAddress
           .findOne(ip)
-          .then(function(ipAddress) {
+          .then(function (ipAddress) {
             sails.log.debug('ipAddress', ipAddress);
             var cacheId = ipAddress ? ipAddress.cacheId : 2;
           });
@@ -219,15 +219,15 @@ module.exports = {
           .populate('assets', {
             platform: platforms
           })
-          .then(function(newerVersions) {
+          .spread(function (newerVersions, assetCaches) {
             // Sort versions which were added after the current one by semver in
             // descending order.
             newerVersions.sort(UtilityService.compareVersion);
 
             var latestVersion = _.find(
               newerVersions,
-              function(newVersion) {
-                _.remove(newVersion.assets, function(o) {
+              function (newVersion) {
+                _.remove(newVersion.assets, function (o) {
                   return o.filetype !== '.nupkg' || !o.hash;
                 });
                 return newVersion.assets.length && semver.lte(
@@ -243,7 +243,7 @@ module.exports = {
             sails.log.debug('Latest Windows Version', latestVersion);
 
             // Change asset name to use full download link
-            assets = _.map(latestVersion.assets, function(asset) {
+            assets = _.map(latestVersion.assets, function (asset) {
               asset.name = url.resolve(
                 sails.config.appUrl,
                 '/download/' + latestVersion.name + '/' + asset.platform + '/' +
@@ -267,24 +267,24 @@ module.exports = {
    * Get release notes for a specific version
    * (GET /notes/:version?)
    */
-  releaseNotes: function(req, res) {
+  releaseNotes: function (req, res) {
     var version = req.params.version;
 
     Version
       .findOne(version)
-      .then(function(currentVersion) {
+      .then(function (currentVersion) {
         if (!currentVersion) {
           return res.notFound('The specified version does not exist');
         }
 
         return res.format({
-          'application/json': function() {
+          'application/json': function () {
             res.send({
               'notes': currentVersion.notes,
               'pub_date': currentVersion.createdAt.toISOString()
             });
           },
-          'default': function() {
+          'default': function () {
             res.send(currentVersion.notes);
           }
         });
@@ -300,7 +300,7 @@ module.exports = {
    * @param  {[type]} res [description]
    * @return {[type]}     [description]
    */
-  destroy: function(req, res) {
+  destroy: function (req, res) {
     var pk = actionUtil.requirePk(req);
 
     var query = Version.findOne(pk);
@@ -311,11 +311,11 @@ module.exports = {
         'No record found with the specified `name`.'
       );
 
-      var deletePromises = _.map(record.assets, function(asset) {
+      var deletePromises = _.map(record.assets, function (asset) {
         return Promise.join(
           AssetService.destroy(asset, req),
           AssetService.deleteFile(asset),
-          function() {
+          function () {
             sails.log.info('Destroyed asset: ', asset);
           });
       });

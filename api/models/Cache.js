@@ -53,6 +53,11 @@ module.exports = {
         assetHttpUrl: {
             type: 'string',
             required: true,
+        },
+
+        assets: {
+            collection: 'asset',
+            via: 'cache',
         }
     },
     autoPK: false

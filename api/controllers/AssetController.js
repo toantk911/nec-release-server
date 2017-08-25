@@ -208,7 +208,8 @@ module.exports = {
                 hash: fileHash,
                 filetype: fileExt,
                 fd: uploadedFile.fd,
-                size: uploadedFile.size
+                size: uploadedFile.size,
+                cache: 2
               }, data))
               .exec(function created(err, newInstance) {
 
