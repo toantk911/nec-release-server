@@ -209,7 +209,7 @@ module.exports = {
                 filetype: fileExt,
                 fd: uploadedFile.fd,
                 size: uploadedFile.size,
-                cache: 2
+                cache: sails.config.defaultCache
               }, data))
               .exec(function created(err, newInstance) {
 

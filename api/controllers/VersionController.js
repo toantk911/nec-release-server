@@ -38,6 +38,7 @@ module.exports = {
    * (GET /update/:platform/:version/:channel)
    */
   general: function (req, res) {
+    var ip = UtilityService.getClientIp(req);
     var platform = req.param('platform');
     var version = req.param('version');
     var channel = req.param('channel') || 'stable';
@@ -79,76 +80,83 @@ module.exports = {
 
         sails.log.debug('Time Filter', createdAtFilter);
 
-        return Version
-          .find(UtilityService.getTruthyObject({
-            channel: applicableChannels,
-            createdAt: createdAtFilter
-          }))
-          .populate('assets', {
-            platform: platforms
-          })
-          .then(function (newerVersions) {
-            // Sort versions which were added after the current one by semver in
-            // descending order.
-            newerVersions.sort(UtilityService.compareVersion);
+        IpAddress
+          .findOne(ip)
+          .then(function (ipAddress) {
+            var cacheId = ipAddress ? ipAddress.cacheId : sails.config.defaultCache;
 
-            var latestVersion;
-            sails.log.debug('Newer Versions', newerVersions);
+            Version
+              .find(UtilityService.getTruthyObject({
+                channel: applicableChannels,
+                createdAt: createdAtFilter
+              }))
+              .populate('assets', {
+                platform: platforms,
+                cache: cacheId
+              })
+              .then(function (newerVersions) {
+                // Sort versions which were added after the current one by semver in
+                // descending order.
+                newerVersions.sort(UtilityService.compareVersion);
 
-            var releaseNotes = _.reduce(
-              newerVersions,
-              function (prevNotes, newVersion) {
+                var latestVersion;
+                sails.log.debug('Newer Versions', newerVersions);
 
-                newVersion.assets = _.filter(newVersion.assets, function (asset) {
-                  return asset.filetype === '.zip';
+                var releaseNotes = _.reduce(
+                  newerVersions,
+                  function (prevNotes, newVersion) {
+
+                    newVersion.assets = _.filter(newVersion.assets, function (asset) {
+                      return asset.filetype === '.zip';
+                    });
+
+                    // If one of the assets for this verison apply to our desired
+                    // platform then we will skip this version
+                    if (!newVersion.assets.length) {
+                      return prevNotes;
+                    }
+
+                    if (!latestVersion && semver.lt(version, newVersion.name)) {
+                      latestVersion = newVersion;
+                    }
+
+                    // Skip if no notes available for this version
+                    if (!newVersion.notes || !newVersion.notes.length) {
+                      return prevNotes;
+                    }
+
+                    // If not the first changenote, prefix with new line
+                    var newChangeNote = !prevNotes.length ? '' : '\n';
+
+                    newChangeNote += '## ' + newVersion.name + '\n' + newVersion.notes;
+
+                    return prevNotes + newChangeNote;
+                  },
+                  '');
+
+                var currentVersionName = _.get(currentVersion, 'name');
+
+                sails.log.debug('Version candidate', latestVersion);
+                sails.log.debug('Current version', currentVersionName);
+
+                if (!latestVersion || latestVersion.name === currentVersionName) {
+                  sails.log.debug('Version candidate denied');
+                  return res.status(204).send('No updates.');
+                }
+
+                sails.log.debug('Version candidate accepted');
+
+                return res.ok({
+                  url: url.resolve(
+                    sails.config.appUrl,
+                    '/download/' + latestVersion.name + '/' +
+                    latestVersion.assets[0].platform + '?filetype=zip'
+                  ),
+                  name: latestVersion.name,
+                  notes: releaseNotes,
+                  pub_date: latestVersion.createdAt.toISOString()
                 });
-
-                // If one of the assets for this verison apply to our desired
-                // platform then we will skip this version
-                if (!newVersion.assets.length) {
-                  return prevNotes;
-                }
-
-                if (!latestVersion && semver.lt(version, newVersion.name)) {
-                  latestVersion = newVersion;
-                }
-
-                // Skip if no notes available for this version
-                if (!newVersion.notes || !newVersion.notes.length) {
-                  return prevNotes;
-                }
-
-                // If not the first changenote, prefix with new line
-                var newChangeNote = !prevNotes.length ? '' : '\n';
-
-                newChangeNote += '## ' + newVersion.name + '\n' + newVersion.notes;
-
-                return prevNotes + newChangeNote;
-              },
-              '');
-
-            var currentVersionName = _.get(currentVersion, 'name');
-
-            sails.log.debug('Version candidate', latestVersion);
-            sails.log.debug('Current version', currentVersionName);
-
-            if (!latestVersion || latestVersion.name === currentVersionName) {
-              sails.log.debug('Version candidate denied');
-              return res.status(204).send('No updates.');
-            }
-
-            sails.log.debug('Version candidate accepted');
-
-            return res.ok({
-              url: url.resolve(
-                sails.config.appUrl,
-                '/download/' + latestVersion.name + '/' +
-                latestVersion.assets[0].platform + '?filetype=zip'
-              ),
-              name: latestVersion.name,
-              notes: releaseNotes,
-              pub_date: latestVersion.createdAt.toISOString()
-            });
+              });
           });
       })
       .catch(res.negotiate);
@@ -207,57 +215,57 @@ module.exports = {
         IpAddress
           .findOne(ip)
           .then(function (ipAddress) {
-            sails.log.debug('ipAddress', ipAddress);
-            var cacheId = ipAddress ? ipAddress.cacheId : 2;
-          });
+            var cacheId = ipAddress ? ipAddress.cacheId : sails.config.defaultCache;
 
-        return Version
-          .find(UtilityService.getTruthyObject({
-            channel: applicableChannels,
-            createdAt: createdAtFilter
-          }))
-          .populate('assets', {
-            platform: platforms
-          })
-          .spread(function (newerVersions, assetCaches) {
-            // Sort versions which were added after the current one by semver in
-            // descending order.
-            newerVersions.sort(UtilityService.compareVersion);
+            Version
+              .find(UtilityService.getTruthyObject({
+                channel: applicableChannels,
+                createdAt: createdAtFilter
+              }))
+              .populate('assets', {
+                platform: platforms,
+                cache: cacheId
+              })
+              .then(function (newerVersions) {
+                // Sort versions which were added after the current one by semver in
+                // descending order.
+                newerVersions.sort(UtilityService.compareVersion);
 
-            var latestVersion = _.find(
-              newerVersions,
-              function (newVersion) {
-                _.remove(newVersion.assets, function (o) {
-                  return o.filetype !== '.nupkg' || !o.hash;
+                var latestVersion = _.find(
+                  newerVersions,
+                  function (newVersion) {
+                    _.remove(newVersion.assets, function (o) {
+                      return o.filetype !== '.nupkg' || !o.hash;
+                    });
+                    return newVersion.assets.length && semver.lte(
+                      version, newVersion.name
+                    );
+                  });
+
+                if (!latestVersion) {
+                  sails.log.debug('Version not found');
+                  return res.status(500).send('Version not found');
+                }
+
+                sails.log.debug('Latest Windows Version', latestVersion);
+
+                // Change asset name to use full download link
+                assets = _.map(latestVersion.assets, function (asset) {
+                  asset.name = url.resolve(
+                    sails.config.appUrl,
+                    '/download/' + latestVersion.name + '/' + asset.platform + '/' +
+                    asset.name
+                  );
+
+                  return asset;
                 });
-                return newVersion.assets.length && semver.lte(
-                  version, newVersion.name
-                );
+
+                var output = WindowsReleaseService.generate(assets);
+
+                res.header('Content-Length', output.length);
+                res.attachment('RELEASES');
+                return res.send(output);
               });
-
-            if (!latestVersion) {
-              sails.log.debug('Version not found');
-              return res.status(500).send('Version not found');
-            }
-
-            sails.log.debug('Latest Windows Version', latestVersion);
-
-            // Change asset name to use full download link
-            assets = _.map(latestVersion.assets, function (asset) {
-              asset.name = url.resolve(
-                sails.config.appUrl,
-                '/download/' + latestVersion.name + '/' + asset.platform + '/' +
-                asset.name
-              );
-
-              return asset;
-            });
-
-            var output = WindowsReleaseService.generate(assets);
-
-            res.header('Content-Length', output.length);
-            res.attachment('RELEASES');
-            return res.send(output);
           });
       })
       .catch(res.negotiate);
