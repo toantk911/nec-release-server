@@ -54,6 +54,7 @@ module.exports = {
     var platforms = PlatformService.detect(platform, true);
 
     sails.log.debug('Update Search Query', {
+      ip: ip,
       platform: platforms,
       version: version,
       channel: channel
@@ -83,7 +84,7 @@ module.exports = {
         IpAddress
           .findOne(ip)
           .then(function (ipAddress) {
-            var cacheId = ipAddress ? ipAddress.cacheId : sails.config.defaultCache;
+            var cacheId = ipAddress ? ipAddress.cache : sails.config.defaultCache;
 
             Version
               .find(UtilityService.getTruthyObject({
@@ -215,7 +216,7 @@ module.exports = {
         IpAddress
           .findOne(ip)
           .then(function (ipAddress) {
-            var cacheId = ipAddress ? ipAddress.cacheId : sails.config.defaultCache;
+            var cacheId = ipAddress ? ipAddress.cache : sails.config.defaultCache;
 
             Version
               .find(UtilityService.getTruthyObject({

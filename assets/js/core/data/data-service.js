@@ -373,7 +373,7 @@ angular.module('app.core.data.service', [
           throw new Error('The passed asset object must have been submitted to the database in order to be updated');
         }
 
-        return $http.post('/api/asset/' + asset.name, asset)
+        return $http.post('/api/asset/' + asset.id, asset)
           .then(function(response) {
             Notification.success('Asset Updated Successfully.');
 
@@ -396,12 +396,12 @@ angular.module('app.core.data.service', [
        *                        as we know the result of the operation
        *                        Contains the response object.
        */
-      self.deleteAsset = function(name) {
-        if (!name) {
-          throw new Error('A asset name is required for deletion');
+      self.deleteAsset = function(id) {
+        if (!id) {
+          throw new Error('A asset id is required for deletion');
         }
 
-        return $http.delete('/api/asset/' + name)
+        return $http.delete('/api/asset/' + id)
           .then(function success(response) {
             Notification.success('Asset Deleted Successfully.');
 
@@ -451,7 +451,7 @@ angular.module('app.core.data.service', [
           return self.initialize();
         }
 
-        var notificationMessage = (asset || {}).name || '';
+        var notificationMessage = asset ? asset.name + 'at cache ' + asset.cache : '';
 
         var versionIndex, index;
 

@@ -76,7 +76,7 @@ module.exports = {
       IpAddress
         .findOne(ip)
         .then(function (ipAddress) {
-          var cacheId = ipAddress ? ipAddress.cacheId : sails.config.defaultCache;
+          var cacheId = ipAddress ? ipAddress.cache : sails.config.defaultCache;
 
           var assetOptions = UtilityService.getTruthyObject({
             platform: platforms,
@@ -236,9 +236,55 @@ module.exports = {
                   }
                   Asset.publishCreate(newInstance, !req.options.mirror && req);
                 }
+              });
 
-                // Send JSONP-friendly response if it's supported
-                res.created(newInstance);
+            // Get cache list and copy asset to caches via FTP
+            Cache
+              .find({})
+              .then(function (caches) {
+                var copyPromises = _.map(caches, function (cache) {
+                  if (cache.cacheId !== sails.config.defaultCache) {
+                    sails.log.debug('Copying asset to cache', cache.cacheName);
+                    var remote_file = path.join(cache.assetFtpPath, fileRelativePath);
+
+                    return new Promise(function (resolve, reject) {
+                      AssetService.ftpUpload(uploadedFile.fd, remote_file, cache.cacheIP, cache.cachePort, cache.ftpUploadUser, cache.ftpUploadPassword)
+                        .then(function uploadDone(result) {
+                          Asset
+                            .create(_.merge({
+                              name: uploadedFile.filename,
+                              hash: fileHash,
+                              filetype: fileExt,
+                              fd: fileRelativePath,
+                              size: uploadedFile.size,
+                              cache: cache.cacheId
+                            }, data))
+                            .exec(function created(err, newInstance) {
+                              if (err) return res.negotiate(err);
+
+                              if (req._sails.hooks.pubsub) {
+                                if (req.isSocket) {
+                                  Asset.subscribe(req, newInstance);
+                                  Asset.introduce(newInstance);
+                                }
+                                Asset.publishCreate(newInstance, !req.options.mirror && req);
+                              }
+
+                              resolve('');
+                            });
+                        })
+                        .catch(res.negotiate);
+                    });
+                  }
+                });
+
+                // Use Promise.all() for uploading parallel or
+                // use Promise.each() for uploading serially. 
+                Promise.all(copyPromises)
+                  .then(function allCacheCopied() {
+                    // Send JSONP-friendly response if it's supported
+                    res.created({});
+                  });
               });
           })
           .catch(res.negotiate);

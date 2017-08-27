@@ -35,8 +35,8 @@ module.exports = {
   appUrl: 'SITE_URL',
 
   // The default cache for downloading asset in case client doesn't exist in IP list.
-  // Mapping with cacheId in the database
-  defaultCache: 'CACHE_ID',
+  // Mapping with cacheId in the database and point to same host with the release server
+  defaultCache: CACHE_ID,
 
   auth: {
     // Provide a set of credentials that can be used to access the admin interface.

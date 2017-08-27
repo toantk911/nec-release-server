@@ -14,7 +14,7 @@ angular.module('app.admin.edit-version-asset-modal', [])
       };
 
       $scope.deleteAsset = function() {
-        DataService.deleteAsset(asset.name)
+        DataService.deleteAsset(asset.id)
           .then(function success(response) {
             $uibModalInstance.close();
           }, function error(response) {});

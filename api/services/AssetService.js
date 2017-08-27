@@ -13,6 +13,8 @@ var Promise = require('bluebird');
 
 var SkipperDisk = require('skipper-disk');
 
+var FtpClient = require("ftp");
+
 var AssetService = {};
 
 AssetService.serveFile = function (req, res, asset) {
@@ -20,7 +22,7 @@ AssetService.serveFile = function (req, res, asset) {
     .findOne(asset.id)
     .populate('cache')
     .then(function (asset) {
-      if (asset.cache.cacheId == sails.config.defaultCache && !asset.cache.assetHttpUrl) {
+      if (asset.cache.cacheId === sails.config.defaultCache && !asset.cache.assetHttpUrl) {
         // Serve file directly if has no url
         var assetPath = path.join(sails.config.files.dirname, asset.fd);
         // Stream the file to the user
@@ -46,7 +48,7 @@ AssetService.serveFile = function (req, res, asset) {
       else {
         AssetService.countDownload(asset);
 
-        var redirectUrl = asset.name = url.resolve(asset.cache.assetHttpUrl, asset.fd);
+        var redirectUrl = url.resolve(asset.cache.assetHttpUrl, asset.fd);
         res.redirect(302, redirectUrl);
       }
     });
@@ -89,7 +91,7 @@ AssetService.destroy = function (asset, req) {
     throw new Error('You must pass an asset');
   }
 
-  return Asset.destroy(asset.name)
+  return Asset.destroy(asset.id)
     .then(function destroyedRecord() {
       if (sails.hooks.pubsub) {
         Asset.publishDestroy(
@@ -120,11 +122,21 @@ AssetService.deleteFile = function (asset) {
     throw new Error('The provided asset does not have a file descriptor');
   }
 
-  var fileAdapter = SkipperDisk();
-  var fileAdapterRmAsync = Promise.promisify(fileAdapter.rm);
+  if (asset.cache === sails.config.defaultCache) {
+    var fileAdapter = SkipperDisk();
+    var fileAdapterRmAsync = Promise.promisify(fileAdapter.rm);
 
-  var assetPath = path.join(sails.config.files.dirname, asset.fd);
-  return fileAdapterRmAsync(assetPath);
+    var assetPath = path.join(sails.config.files.dirname, asset.fd);
+    return fileAdapterRmAsync(assetPath);
+  }
+  else {
+    return Cache
+      .findOne(asset.cache)
+      .then(function (cache) {
+        var remote_file = path.join(cache.assetFtpPath, asset.fd);
+        return AssetService.ftpDelete(remote_file, cache.cacheIP, cache.cachePort, cache.ftpUploadUser, cache.ftpUploadPassword);
+      });
+  }
 };
 
 /**
@@ -163,6 +175,80 @@ AssetService.countDownload = function (asset) {
         }
       });
   }
+};
+
+/**
+ * Upload file via FTP
+ * @param   {string}  local_file  The path of file at local
+ * @param   {string}  remote_file The path of file at FTP folder
+ * @param   {string}  host        The IP address of FTP server
+ * @param   {number}  port        The port of FTP server
+ * @param   {string}  user        The username to upload via FTP
+ * @param   {string}  password    The password to upload via FTP
+ */
+AssetService.ftpUpload = function (local_file, remote_file, host, port, user, password) {
+  if (!port) { port = 21; }
+
+  return new Promise(function (resolve, reject) {
+    var client = new FtpClient();
+    client.on('ready', function () {
+      var savepath = path.dirname(remote_file);
+      client.mkdir(savepath, function (mkdirError) {
+        client.put(local_file, remote_file, function (error) {
+          client.end();
+          if (error) {
+            sails.log.error('An error occurred while copying asset to ' + host, error);
+            reject(error);
+          }
+          else {
+            resolve('');
+          }
+        });
+      });
+    });
+    client.on('error', function (error) {
+      client.end();
+      sails.log.error('An error occurred while copying asset to ' + host, error);
+      reject(error);
+    });
+    client.connect({
+      host: host,
+      port: port,
+      user: user,
+      password: password
+    });
+  });
+};
+
+AssetService.ftpDelete = function (remote_file, host, port, user, password) {
+  if (!port) { port = 21; }
+
+  return new Promise(function (resolve, reject) {
+    var client = new FtpClient();
+    client.on('ready', function () {
+      client.delete(remote_file, function (error) {
+        client.end();
+        if (error) {
+          sails.log.error('An error occurred while deleting asset at ' + host, error);
+          reject(error);
+        }
+        else {
+          resolve('');
+        }
+      });
+    });
+    client.on('error', function (error) {
+      client.end();
+      sails.log.error('An error occurred while deleting asset at ' + host, error);
+      reject(error);
+    });
+    client.connect({
+      host: host,
+      port: port,
+      user: user,
+      password: password
+    });
+  });
 };
 
 module.exports = AssetService;

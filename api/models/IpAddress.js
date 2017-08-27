@@ -15,9 +15,9 @@ module.exports = {
             required: true,
         },
 
-        cacheId: {
-            type: 'integer',
-            required: true,
+        cache: {
+            model: 'cache',
+            required: true
         }
     },
     autoPK: false
